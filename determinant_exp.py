@@ -1,5 +1,4 @@
 import numpy as np
-# from keras.datasets import mnist
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import pandas as pd
@@ -131,23 +130,23 @@ def getLocalSearchParam(P,sol_inds):
 #############################################################################################################
 # Experiments
 
-debug = True
-do_experiment_1 = True
-do_experiment_2 = False
+debug = False
+do_experiment_1 = False
+do_experiment_2 = True
 
 
 # Experiment 1: Epsilon Values against K on Real and Random Datasets
 if do_experiment_1:
     print("Starting Experiment 1")
-    numIters = 10
-    num_streams = [10,50]
+    numIters = 5
+    num_streams = [10]
     datasets = ["genes.csv","mnist.csv","genes_random","mnist_random"]
-    k_step = 50
-    num_points_in_data = 3000 #only 3000 points from each dataset for computational reasons, set to None otherwise
+    k_step = 10
+    num_points_in_data = None #only 3000 points from each dataset for computational reasons, set to None otherwise
 
     if debug: 
-        numIters = 2
-        num_streams = [2,5]
+        numIters = 1
+        num_streams = [5]
         k_step = 2
 
     allResults = dict()
@@ -183,10 +182,12 @@ if do_experiment_1:
         # data = list(data)
         
         for m in num_streams:
-            points_per_chunk = n//m
-            max_k = points_per_chunk
-            ks_to_run = [1]
-            for k in range(k_step,max_k + 1,k_step): ks_to_run.append(k)
+            points_per_chunk = 3000
+            # max_k = points_per_chunk
+            # ks_to_run = [1]
+            # for k in range(k_step,max_k + 1,k_step): ks_to_run.append(k)
+            ks_to_run = [k for k in range(2,21,2)]
+            max_k = max(ks_to_run)
             ks_to_run_set = set(ks_to_run)
 
             results = dict()
@@ -206,7 +207,7 @@ if do_experiment_1:
                     for k in tqdm(range(1,max_k+1)):
                         sol_inds, sol_vecs, sol_norms = chooseNextVec(P_stream[i],sol_inds,sol_vecs,sol_norms)
                         if k in ks_to_run_set:
-                            eps = getLocalSearchParam(P_stream[i],sol_inds) - 1
+                            eps = getLocalSearchParam(P_stream[i],sol_inds)
                             eps_streams[k].append(eps)
                 
                 for k in ks_to_run:
@@ -242,41 +243,41 @@ if do_experiment_1:
             dataset_random = datasets[3]
 
         for m in num_streams:
-            plot_title = "Dataset: " + exp + ", No. of Streams: " + str(m)
+            plot_title = "Dataset: " + exp
             plt.title(plot_title)
 
             X = allResults[dataset][m]['ks_to_run']
             
-            Y = allResults[dataset][m]['max']
+            Y = allResults[dataset][m]['avg']
+            Y = [1 + y for y in Y]
             plt.plot(X,Y,label = "Real Dataset")
 
-            Y = allResults[dataset_random][m]['max']
+            Y = allResults[dataset_random][m]['avg']
+            Y = [1 + y for y in Y]
             plt.plot(X,Y,label = "Random Dataset")
 
-            # Y = [i**(0.5) for i in X]
-            # plt.plot(X,Y,label = "Theoretical Bound: sqrt(k)")
-
-
+            Y = [1 + i**(0.5) for i in X]
+            plt.plot(X,Y,label = "Theoretical Bound: sqrt(k)")
 
             plt.xlabel("K")
-            plt.ylabel("Locally Optimal Epsilon")
+            plt.ylabel("Local Optimality: 1 + Epsilon")
             plt.legend()
 
-            plt.savefig("images/" + plot_title+'.jpg')
+            plt.savefig("images_final/" + plot_title + "Exp1_3000_5iters"'.jpg')
             plt.clf()
 
 
 
 #############################################################################################################
 
-# Experiment 2: Fix K, and plot locally optimal epsilon against number of points in base set. 
-
+# Experiment 2: Fix K, and plot local optimality epsilon against number of points in base set. 
+do_random = False
 if do_experiment_2:
     print("Starting Experiment 2")
-    numIters = 10
-    num_points_in_chunk = [50*i for i in range(1,11)]
+    numIters = 5
+    num_points_in_chunk = [500*i for i in range(1,9)]
     datasets = ["genes.csv","mnist.csv","genes_random","mnist_random"]
-    ks_to_run = [10,20,30,40]
+    ks_to_run = [5,10,15,20]
 
     if debug: 
         numIters = 2
@@ -299,6 +300,8 @@ if do_experiment_2:
     # for dataset in ["genes.csv"]:
         data = None
 
+        if do_random == False and dataset.endswith("random"): continue
+
         if dataset == 'mnist.csv':
             data = load_mnist()
         elif dataset == "genes.csv":
@@ -313,26 +316,28 @@ if do_experiment_2:
 
         # Normalize data for numerical reasons
         max_entry = np.amax(data)
-        # data = (1/10000) * data
         data = (1/max_entry) * data
-        # data = list(data)
         
         for M in num_points_in_chunk:
-            results = dict()
-            for k in ks_to_run: results[k] = []
-            for iter in range(1,numIters+1):
-                P = list(data[np.random.choice(n, M, replace=False),:])
-                for i in tqdm(range(M)):
+            print("Number of points in chunk: ",M)
+            for max_k in ks_to_run:
+                results = dict()
+                for iter in range(1,numIters+1):
+                    P = list(data[np.random.choice(n, M, replace=False),:])
+                    # for i in tqdm(range(M)):
                     sol_inds, sol_vecs, sol_norms = [],[],[]
-                    for k in range(1,max_k+1):
+                    for k in tqdm(range(1,max_k+1)):
                         sol_inds, sol_vecs, sol_norms = chooseNextVec(P,sol_inds,sol_vecs,sol_norms)
-                        if k in ks_to_run_set:
-                            eps = getLocalSearchParam(P,sol_inds) - 1
-                            if eps > allResults[dataset][M][k]: allResults[dataset][M][k] = eps
+                        # if k in ks_to_run_set:
+                    eps = getLocalSearchParam(P,sol_inds) - 1
+                    allResults[dataset][M][max_k] += eps
+                allResults[dataset][M][max_k] /= numIters
+
 
 
 
     for exp in ["MNIST","GENES"]:
+        print("Experiment: ",exp)
         dataset = None
         dataset_random = None
         if exp == "MNIST":
@@ -345,19 +350,23 @@ if do_experiment_2:
         plot_title = "Dataset: " + exp
         plt.title(plot_title)
         X = num_points_in_chunk
+        print("X: num_points_in_chunk", X)
+
         for k in ks_to_run:
+            print("k = ",k)
             Y1,Y2 = [],[]
             for M in num_points_in_chunk:
-                Y1.append(allResults[dataset][M][k])
-                Y2.append(allResults[dataset_random][M][k])
-            plt.plot(X,Y1,label="Real Dataset, k = " +str(k))
-            plt.plot(X,Y2,label="Random Dataset, k= " +str(k))
+                Y1.append(allResults[dataset][M][k]+1)
+                if do_random: Y2.append(allResults[dataset_random][M][k]+1)
+            plt.plot(X,Y1,label="k = " +str(k))
+            print("Y: Epsilons for Real Dataset")
+            print(Y1)
+            if do_random: 
+                plt.plot(X,Y2,label="Random Dataset, k= " +str(k))
+                print("Y: Epsilons for Random Dataset")
+                print(Y2)
         plt.xlabel("Number of Points in P")
-        plt.ylabel("Locally Optimal Epsilon")
+        plt.ylabel("Local Optimality: 1 + Epsilon")
         plt.legend()
-        plt.savefig("images/" + plot_title +'.jpg')
+        plt.savefig("images_final/" + plot_title +'_pointsetsize.jpg')
         plt.clf()
-
-
-
-
